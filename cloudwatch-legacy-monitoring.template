@@ -4,7 +4,7 @@ Parameters:
   Email:
     Type: String
     Description: Email address to notify when an event has triggered an alarm
-    Default: jason.birchall@digital.justice.gov.uk
+    Default: platforms@digital.justice.gov.uk
   PagerDutyEndpoint:
     Type: String
     Description: Enter the pagerduty integration url
@@ -12,19 +12,19 @@ Parameters:
       https://events.pagerduty.com/integration/5b94c2c03a2244998ff6bed99a606945/enqueue
   DockerContainerGroup:
     Type: String
-    Description: Enter a CloudWatch log group name.
+    Description: Enter a CloudWatch log group name, this allows Cloudwatch to pattern match errors and create triggered alerts.
   KernelLoggingGroup:
     Type: String
-    Description: Enter a CloudWatch log group name.
+    Description: Enter a CloudWatch log group name, this allows Cloudwatch to pattern match errors and create triggered alerts.
   NginxLoggingGroup:
     Type: String
-    Description: Enter a CloudWatch log group name.
+    Description: Enter a CloudWatch log group name, this allows Cloudwatch to pattern match errors and create triggered alerts.
   SystemLoggingGroup:
     Type: String
-    Description: Enter a CloudWatch log group name.
+    Description: Enter a CloudWatch log group name, this allows Cloudwatch to pattern match errors and create triggered alerts.
   UpstartLoggingGroup:
     Type: String
-    Description: Enter a CloudWatch log group name.
+    Description: Enter a CloudWatch log group name, this allows Cloudwatch to pattern match errors and create triggered alerts.
   AutoscalingGroupedName:
     Type: String
     Description: Please enter the name of the current Autoscaling group for this project
@@ -370,12 +370,10 @@ Resources:
               {
                  "type" : "metric",
                  "y" : 0,
-                 "x" : 12,
+                 "x" : 0,
                  "height" : 6,
-                 "width" : 12
-                 "region" : "eu-west-1",
+                 "width" : 12,
                  "properties" : {
-                    "period" : 300,
                     "metrics" : [
                        [
                           "AWS/EC2",
@@ -384,12 +382,155 @@ Resources:
                           "${AutoscalingGroupedName}"
                        ]
                     ],
+                    "period":300,
                     "stat" : "Average",
-                    "title" : "CPU Util"
-                 },
-              }
+                    "region":"eu-west-1",
+                    "title" : "Autoscaling CPU usage"
+                 }
+              },
+              {
+                 "type" : "metric",
+                 "y" : 0,
+                 "x" : 12,
+                 "height" : 6,
+                 "width" : 12,
+                 "properties" : {
+                    "metrics" : [
+                       [
+                          "AWS/EC2",
+                          "StatusCheckFailed",
+                          "AutoScalingGroupName",
+                          "${AutoscalingGroupedName}"
+                       ]
+                    ],
+                    "period":300,
+                    "stat" : "Average",
+                    "region":"eu-west-1",
+                    "title" : "Instance status check failures (metric: 1=fail 0=pass)"
+                 }
+              },
+              {
+                 "type" : "metric",
+                 "y" : 12,
+                 "x" : 0,
+                 "height" : 6,
+                 "width" : 12,
+                 "properties" : {
+                    "metrics" : [
+                       [
+                          "AWS/EC2",
+                          "DiskReadOps",
+                          "AutoScalingGroupName",
+                          "${AutoscalingGroupedName}"
+                       ]
+                    ],
+                    "period":300,
+                    "stat" : "Average",
+                    "region":"eu-west-1",
+                    "title" : "Disk Read Ops"
+                 }
+              }, 
+              {
+                 "type" : "metric",
+                 "y" : 12,
+                 "x" : 12,
+                 "height" : 6,
+                 "width" : 12,
+                 "properties" : {
+                    "metrics" : [
+                       [
+                          "AWS/EC2",
+                          "DiskWriteOps",
+                          "AutoScalingGroupName",
+                          "${AutoscalingGroupedName}"
+                       ]
+                    ],
+                    "period":300,
+                    "stat" : "Average",
+                    "region":"eu-west-1",
+                    "title" : "Disk Write Ops"
+                 }
+              },
+              {
+                 "type" : "metric",
+                 "y" : 24,
+                 "x" : 0,
+                 "height" : 6,
+                 "width" : 12,
+                 "properties" : {
+                    "metrics" : [
+                       [
+                          "AWS/EC2",
+                          "NetworkIn",
+                          "AutoScalingGroupName",
+                          "${AutoscalingGroupedName}"
+                       ]
+                    ],
+                    "period":300,
+                    "stat" : "Average",
+                    "region":"eu-west-1",
+                    "title" : "Incoming Network Traffic"
+                 }
+              },      
+              {
+                 "type" : "metric",
+                 "y" : 24,
+                 "x" : 12,
+                 "height" : 6,
+                 "width" : 12,
+                 "properties" : {
+                    "metrics" : [
+                       [
+                          "AWS/EC2",
+                          "NetworkOut",
+                          "AutoScalingGroupName",
+                          "${AutoscalingGroupedName}"
+                       ]
+                    ],
+                    "period":300,
+                    "stat" : "Average",
+                    "region":"eu-west-1",
+                    "title" : "Outgoing Network Traffic"
+                 }
+              },
+              {
+                 "type" : "metric",
+                 "y" : 36,
+                 "x" : 0,
+                 "height" : 6,
+                 "width" : 24,
+                 "properties" : {
+                    "metrics" : [
+                       [
+                          "LogMetrics",
+                          "docker.log-ERRORS"
+                       ],
+                       [
+                          "LogMetrics",
+                          "kern.log-ERRORS"
+                       ],
+                       [
+                          "LogMetrics",
+                          "nginx.log-ERRORS"
+                       ],
+                       [
+                          "LogMetrics",
+                          "syslog.log-ERRORS"
+                       ],
+                       [
+                          "LogMetrics",
+                          "upstart.log-ERRORS"
+                       ]
+                    ],
+                    "period":300,
+                    "stat" : "Sum",
+                    "region":"eu-west-1",
+                    "title" : "Error Monitoring"
+                 }
+              }     
            ]
         }
+
 
 # Notification configuration
 
