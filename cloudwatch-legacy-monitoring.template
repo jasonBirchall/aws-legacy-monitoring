@@ -1,0 +1,407 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: MoJ Legacy Application Log Monitoring
+Parameters:
+  Email:
+    Type: String
+    Description: Email address to notify when an event has triggered an alarm
+    Default: jason.birchall@digital.justice.gov.uk
+  PagerDutyEndpoint:
+    Type: String
+    Description: Enter the pagerduty integration url
+    Default: >-
+      https://events.pagerduty.com/integration/5b94c2c03a2244998ff6bed99a606945/enqueue
+  DockerContainerGroup:
+    Type: String
+    Description: Enter a CloudWatch log group name.
+  KernelLoggingGroup:
+    Type: String
+    Description: Enter a CloudWatch log group name.
+  NginxLoggingGroup:
+    Type: String
+    Description: Enter a CloudWatch log group name.
+  SystemLoggingGroup:
+    Type: String
+    Description: Enter a CloudWatch log group name.
+  UpstartLoggingGroup:
+    Type: String
+    Description: Enter a CloudWatch log group name.
+  AutoscalingGroupedName:
+    Type: String
+    Description: Please enter the name of the current Autoscaling group for this project
+
+Resources:
+
+# Log file metric setup
+
+  DockerErrorFilter:
+    Type: 'AWS::Logs::MetricFilter'
+    Properties:
+      LogGroupName: !Ref DockerContainerGroup
+      FilterPattern: error
+      MetricTransformations:
+        - MetricValue: '1'
+          MetricNamespace: LogMetrics
+          MetricName: docker.log-ERRORS
+
+  KernelErrorFilter:
+    Type: 'AWS::Logs::MetricFilter'
+    Properties:
+      LogGroupName: !Ref KernelLoggingGroup
+      FilterPattern: ERROR
+      MetricTransformations:
+        - MetricValue: '1'
+          MetricNamespace: LogMetrics
+          MetricName: kern.log-ERRORS
+
+  NginxErrorFilter:
+    Type: 'AWS::Logs::MetricFilter'
+    Properties:
+      LogGroupName: !Ref NginxLoggingGroup
+      FilterPattern: ERROR
+      MetricTransformations:
+        - MetricValue: '1'
+          MetricNamespace: LogMetrics
+          MetricName: nginx.log-ERRORS
+
+  SyslogErrorFilter:
+    Type: 'AWS::Logs::MetricFilter'
+    Properties:
+      LogGroupName: !Ref SystemLoggingGroup
+      FilterPattern: ERROR
+      MetricTransformations:
+        - MetricValue: '1'
+          MetricNamespace: LogMetrics
+          MetricName: syslog.log-ERRORS
+
+  UpstartErrorFilter:
+    Type: 'AWS::Logs::MetricFilter'
+    Properties:
+      LogGroupName: !Ref UpstartLoggingGroup
+      FilterPattern: ERROR
+      MetricTransformations:
+        - MetricValue: '1'
+          MetricNamespace: LogMetrics
+          MetricName: upstart.log-ERRORS
+
+# Error monitor alarms  
+
+  DockerLogErrorsExceeded:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Join 
+        - '-'
+        - - !Ref AWS::StackName
+          - docker-error-monitor
+      AlarmDescription: >-
+        If the /var/lib/docker/containers.log receives five errors in two
+        minutes, this alarm will trigger.
+      Namespace: LogMetrics
+      MetricName: docker.log-ERRORS
+      Statistic: Sum
+      Period: '60'
+      EvaluationPeriods: '2'
+      Threshold: '4'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref PagerDutyNotification
+      ComparisonOperator: GreaterThanThreshold
+
+  KernelLogErrorsExceeded:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Join 
+        - '-'
+        - - !Ref AWS::StackName
+          - kernel-error-monitor
+      AlarmDescription: >-
+        If the /var/log/kern.log receives five errors in two minutes, this alarm
+        will trigger.
+      Namespace: LogMetrics
+      MetricName: kern.log-ERRORS
+      Statistic: Sum
+      Period: '60'
+      EvaluationPeriods: '2'
+      Threshold: '4'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref PagerDutyNotification
+      ComparisonOperator: GreaterThanThreshold
+
+  NginxLogErrorsExceeded:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Join 
+        - '-'
+        - - !Ref AWS::StackName
+          - nginx-error-monitor
+      AlarmDescription: >-
+        If the /var/log/nginx.log receives five errors in two minutes, this
+        alarm will trigger.
+      Namespace: LogMetrics
+      MetricName: nginx.log-ERRORS
+      Statistic: Sum
+      Period: '60'
+      EvaluationPeriods: '2'
+      Threshold: '4'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref PagerDutyNotification
+      ComparisonOperator: GreaterThanThreshold
+
+  SysLogErrorsExceeded:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Join 
+        - '-'
+        - - !Ref AWS::StackName
+          - syslog-error-monitor
+      AlarmDescription: >-
+        If the /var/log/syslog receives five errors in two minutes, this alarm
+        will trigger.
+      Namespace: LogMetrics
+      MetricName: syslog.log-ERRORS
+      Statistic: Sum
+      Period: '60'
+      EvaluationPeriods: '2'
+      Threshold: '4'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref PagerDutyNotification
+      ComparisonOperator: GreaterThanThreshold
+
+  UpstartLogErrors:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Join 
+        - '-'
+        - - !Ref AWS::StackName
+          - upstart-error-monitor
+      AlarmDescription: >-
+        If the /var/log/upstart receives five errors in two minutes, this alarm
+        will trigger.
+      Namespace: LogMetrics
+      MetricName: upstart.log-ERRORS
+      Statistic: Sum
+      Period: '60'
+      EvaluationPeriods: '2'
+      Threshold: '4'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref PagerDutyNotification
+      ComparisonOperator: GreaterThanThreshold
+
+# Autoscale group monitoring
+
+  CPUoverThreshold:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Join 
+        - '-'
+        - - !Ref AWS::StackName
+          - CPU-high-threshold-alarm
+      AlarmDescription: >-
+        If the CPU exceeds the predefined threshold, this alarm will trigger.
+        Please investigate.
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Statistic: Average
+      Period: '60'
+      EvaluationPeriods: '5'
+      Threshold: '65'
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref PagerDutyNotification
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoscalingGroupedName
+      ComparisonOperator: GreaterThanThreshold
+
+  CPUunderThreshold:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Join 
+        - '-'
+        - - !Ref AWS::StackName
+          - CPU-low-threshold-alarm
+      AlarmDescription: >-
+        If the CPU exceeds the predefined threshold, this alarm will trigger.
+        Please investigate.
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Statistic: Average
+      Period: '60'
+      EvaluationPeriods: '30'
+      Threshold: '1'
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref PagerDutyNotification
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoscalingGroupedName
+      ComparisonOperator: LessThanThreshold
+
+  StatusCheckFailure:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Join 
+        - '-'
+        - - !Ref AWS::StackName
+          - status-check-failure-alarm
+      AlarmDescription: >-
+        If a status check failure occurs on an instance, please investigate. http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/monitoring-system-instance-status-check.html
+      Namespace: AWS/EC2
+      MetricName: StatusCheckFailed
+      Statistic: Average
+      Period: '60'
+      EvaluationPeriods: '5'
+      Threshold: '1'
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref PagerDutyNotification
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoscalingGroupedName
+      ComparisonOperator: GreaterThanThreshold
+
+  DiskReadOp:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Join 
+        - '-'
+        - - !Ref AWS::StackName
+          - disk-read-high-alarm
+      AlarmDescription: >-
+        The diskreadbytes metric measures the rate the physical disk is reading data. If this exceeds the threshold set, an alarm will trigger.
+      Namespace: AWS/EC2
+      MetricName: DiskReadOps
+      Statistic: Average
+      Period: '60'
+      EvaluationPeriods: '10'
+      Threshold: '20'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref PagerDutyNotification
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoscalingGroupedName
+      ComparisonOperator: GreaterThanThreshold
+
+  DiskWriteOp:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Join 
+        - '-'
+        - - !Ref AWS::StackName
+          - disk-write-high-alarm
+      AlarmDescription: >-
+        The diskreadbytes metric measures the rate the physical disk is being written to. If this exceeds the threshold set, an alarm will trigger.
+      Namespace: AWS/EC2
+      MetricName: DiskWriteOps
+      Statistic: Average
+      Period: '60'
+      EvaluationPeriods: '10'
+      Threshold: '20'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref PagerDutyNotification
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoscalingGroupedName
+      ComparisonOperator: GreaterThanThreshold
+
+  NetworkIn:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Join 
+        - '-'
+        - - !Ref AWS::StackName
+          - network-in-high-alarm
+      AlarmDescription: >-
+        The networkIn metric measures the size of bytes over ten minute period. If the size exceeds the allowed threshold, an alert will trigger.
+      Namespace: AWS/EC2
+      MetricName: NetworkIn
+      Statistic: Average
+      Period: '60'
+      EvaluationPeriods: '10'
+      Threshold: '50000'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref PagerDutyNotification
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoscalingGroupedName
+      ComparisonOperator: GreaterThanThreshold
+
+  NetworkOut:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmName: !Join 
+        - '-'
+        - - !Ref AWS::StackName
+          - network-out-high-alarm
+      AlarmDescription: >-
+        The networkOut metric measures the size of bytes over ten minute period. If the size exceeds the allowed threshold, an alert will trigger.
+      Namespace: AWS/EC2
+      MetricName: NetworkOut
+      Statistic: Average
+      Period: '60'
+      EvaluationPeriods: '10'
+      Threshold: '50000'
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref PagerDutyNotification
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoscalingGroupedName
+      ComparisonOperator: GreaterThanThreshold
+
+# Dashboard creation
+
+  BasicDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Join 
+          - '-'
+          - - !Ref AWS::StackName
+            - dashboard
+      DashboardBody: !Sub |
+        {
+           "widgets" : [
+              {
+                 "type" : "metric",
+                 "y" : 0,
+                 "x" : 12,
+                 "height" : 6,
+                 "width" : 12
+                 "region" : "eu-west-1",
+                 "properties" : {
+                    "period" : 300,
+                    "metrics" : [
+                       [
+                          "AWS/EC2",
+                          "CPUUtilization",
+                          "AutoScalingGroupName",
+                          "${AutoscalingGroupedName}"
+                       ]
+                    ],
+                    "stat" : "Average",
+                    "title" : "CPU Util"
+                 },
+              }
+           ]
+        }
+
+# Notification configuration
+
+  AlarmNotificationTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      Subscription:
+        - Endpoint: !Ref Email
+          Protocol: email
+  PagerDutyNotification:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      Subscription:
+        - Endpoint: !Ref PagerDutyEndpoint
+          Protocol: HTTPS
